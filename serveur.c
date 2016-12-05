@@ -10,16 +10,17 @@
 
 #define BUFSIZE 512
 
+void communication(int, struct sockaddr *, socklen_t);
+
+void fin_fils(int);
+
 int main(int argc, char **argv) {
     int sfd, s, ns, r;
     struct addrinfo hints;
     struct addrinfo *result, *rp;
-    char buf[BUFSIZE];
-    ssize_t nread, nwrite;
     struct sockaddr_storage from;
     socklen_t fromlen;
-    char host[NI_MAXHOST];
-    char *message = "Message a envoyer: ";
+    //char *message = "Message a envoyer: ";
 
     if (argc != 2) {
         printf("Usage: %s  port_serveur\n", argv[0]);
@@ -94,36 +95,72 @@ int main(int argc, char **argv) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
-
-        /* Reconnaissance de la machine cliente */
-        s = getnameinfo((struct sockaddr *) &from, fromlen,
-                host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
-        if (s == 0)
-            printf("Debut avec client '%s'\n", host);
-        else
-            fprintf(stderr, "getnameinfo: %s\n", gai_strerror(s));
-
-        for (;;) {
-            printf("Start interact loop\n");
-            nwrite = write(ns, "Message a envoyer: ", strlen("Message a envoyer: "));
-            if (nwrite < 0) {
-                perror("write");
-                close(ns);
+        //communication(ns, (struct sockaddr *) &from, fromlen);
+        //*
+        int pid = fork();
+        switch (pid) {
+            case -1:
+                fprintf(stdout, "Erreur à la creation du fils");
                 break;
-            }
-            printf("Message send\n");
-            nread = read(ns, buf, BUFSIZE);
-            if (nread == 0) {
-                printf("Fin avec client '%s'\n", host);
-                close(ns);
+            case 0:
+                //Code fils
+                communication(ns, (struct sockaddr *) &from, fromlen);
                 break;
-            } else if (nread < 0) {
-                perror("read");
-                close(ns);
-                break;
-            }
-            buf[nread] = '\0';
-            printf("Message recu '%s'\n", buf);
+            default:
+                //Code père
+                printf("I am your father!\n");
+                signal(SIGCHLD,fin_fils);
         }
+        //*/
     }
+}
+
+void communication(int ns, struct sockaddr *from, socklen_t fromlen) {
+    char host[NI_MAXHOST];
+    ssize_t nread, nwrite;
+    char buf[BUFSIZE];
+    /* Reconnaissance de la machine cliente */
+    int s = getnameinfo((struct sockaddr *) from, fromlen,
+            host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    if (s == 0)
+        printf("Debut avec client '%s'\n", host);
+    else
+        fprintf(stderr, "getnameinfo: %s\n", gai_strerror(s));
+
+    for (;;) {
+        printf("Start interact loop\n");
+        nwrite = write(ns, "Message a envoyer: ", strlen("Message a envoyer: "));
+        if (nwrite < 0) {
+            perror("write");
+            close(ns);
+            break;
+        }
+        printf("Message send\n");
+        nread = read(ns, buf, BUFSIZE);
+        if (nread == 0) {
+            printf("Fin avec client '%s'\n", host);
+            close(ns);
+            break;
+        } else if (nread < 0) {
+            perror("read");
+            close(ns);
+            break;
+        }
+        buf[nread] = '\0';
+        printf("Message recu '%s'\n", buf);
+    }
+}
+
+void fin_fils(int n) {
+    int status;
+    int fils = wait(&status);
+    printf("Fils numero: %d\n", fils);
+
+    if (WIFEXITED(status))
+        printf("termine sur exit(%d)\n", WEXITSTATUS(status));
+
+    if (WIFSIGNALED(status))
+        printf("termine sur signal %d\n", WTERMSIG(status));
+
+    exit(EXIT_SUCCESS); /* pour terminer le pere */
 }
