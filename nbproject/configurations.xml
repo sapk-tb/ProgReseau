@@ -3,6 +3,7 @@
   <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
     <df root="." name="0">
       <in>client.c</in>
+      <in>serv_web.c</in>
       <in>serveur.c</in>
     </df>
     <logicalFolder name="ExternalFiles"
@@ -29,9 +30,9 @@
       <makefileType>
         <makeTool>
           <buildCommandWorkingDir>.</buildCommandWorkingDir>
-          <buildCommand>/bin/sh -c "gcc -Wall -o serveur serveur.c &amp;&amp; gcc -Wall -o client client.c"</buildCommand>
-          <cleanCommand>rm -f serveur client</cleanCommand>
-          <executablePath>serveur</executablePath>
+          <buildCommand>/bin/sh -c "gcc -Wall -o serveur serveur.c &amp;&amp; gcc -Wall -o client client.c &amp;&amp; gcc -Wall -o serv_web serv_web.c"</buildCommand>
+          <cleanCommand>rm -f client serveur serv_web</cleanCommand>
+          <executablePath>serv_web</executablePath>
         </makeTool>
         <preBuild>
           <preBuildCommandWorkingDir>.</preBuildCommandWorkingDir>
@@ -39,6 +40,8 @@
         </preBuild>
       </makefileType>
       <item path="client.c" ex="false" tool="0" flavor2="0">
+      </item>
+      <item path="serv_web.c" ex="false" tool="0" flavor2="0">
       </item>
       <item path="serveur.c" ex="false" tool="0" flavor2="0">
       </item>
