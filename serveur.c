@@ -12,7 +12,20 @@
 
 void communication(int, struct sockaddr *, socklen_t);
 
-void fin_fils(int);
+
+void fin_fils(int n) {
+    int status;
+    int fils = wait(&status);
+    printf("Fils numero: %d\n", fils);
+
+    if (WIFEXITED(status))
+        printf("termine sur exit(%d)\n", WEXITSTATUS(status));
+
+    if (WIFSIGNALED(status))
+        printf("termine sur signal %d\n", WTERMSIG(status));
+
+    //exit(EXIT_SUCCESS); /* pour terminer le pere */
+}
 
 int main(int argc, char **argv) {
     int sfd, s, ns, r;
@@ -105,7 +118,7 @@ int main(int argc, char **argv) {
             case 0:
                 //Code fils
                 communication(ns, (struct sockaddr *) &from, fromlen);
-                break;
+                exit(0);
             default:
                 //Code père
                 printf("I am your father!\n");
@@ -149,18 +162,4 @@ void communication(int ns, struct sockaddr *from, socklen_t fromlen) {
         buf[nread] = '\0';
         printf("Message recu '%s'\n", buf);
     }
-}
-
-void fin_fils(int n) {
-    int status;
-    int fils = wait(&status);
-    printf("Fils numero: %d\n", fils);
-
-    if (WIFEXITED(status))
-        printf("termine sur exit(%d)\n", WEXITSTATUS(status));
-
-    if (WIFSIGNALED(status))
-        printf("termine sur signal %d\n", WTERMSIG(status));
-
-    exit(EXIT_SUCCESS); /* pour terminer le pere */
 }
