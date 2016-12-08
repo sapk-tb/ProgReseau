@@ -274,6 +274,8 @@ void communication(int soc, struct sockaddr *from, socklen_t fromlen) {
                 sprintf(buf, "<html><title>404 Not Found</title><body>File or directory not found</body></html>");
                 write(soc, buf, strlen(buf));
                 break;
+            } else {
+                write(soc, "\r\n", strlen("\r\n"));
             }
 
     }
