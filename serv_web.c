@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <errno.h>
 
 
 #define BUFSIZE 512
@@ -38,6 +39,8 @@ enum TypeFichier {
 const char* OK200 = "HTTP/1.1 200 OK\r\n\r\n";
 const char* ERROR403 = "HTTP/1.1 403 Forbidden\r\n\r\nAccess denied\r\n";
 const char* ERROR404 = "HTTP/1.1 404 Not Found\r\n\r\nFile or directory not found\r\n";
+const char* ERROR500 = "HTTP/1.1 500 Internal Server Error\r\n\r\nInternal Server Error\r\n";
+const char* ERROR501 = "HTTP/1.1 501 Not Implemented\r\n\r\nNot Implemented\r\n";
 
 /* Fonction typeFichier()
  * argument: le nom du fichier
@@ -67,11 +70,10 @@ enum TypeFichier typeFichier(char *fichier) {
 #define BUSIZE 1048;
 
 bool envoiFichier(char *fichier, int soc) {
-    printf("Send file %s", fichier);
-    /*
-    int fd;
+    printf("Send file %s\n", fichier);
+    //*
+    //int fd;
     char buf[BUFSIZE];
-    ssize_t nread;
     //*/
     /* A completer.
      * On peut se poser la question de savoir si le fichier est
@@ -82,6 +84,77 @@ bool envoiFichier(char *fichier, int soc) {
      * Note: le fichier peut etre plus gros que votre buffer,
      * de meme il peut etre plus petit...
      */
+
+    int rval;
+    /* Check file existence. */
+    rval = access(fichier, F_OK);
+    if (rval == 0)
+        printf("%s exists\n", fichier);
+    else {
+        if (errno == ENOENT) {
+            printf("%s does not exist\n", fichier);
+            return false;
+            //write(soc, ERROR404, strlen(ERROR404));
+        } else if (errno == EACCES) {
+            printf("%s is not accessible\n", fichier);
+            write(soc, ERROR403, strlen(ERROR403));
+            sprintf(buf, "<html><title>403 Forbidden</title><body>Access denied</body></html>");
+            write(soc, buf, strlen(buf));
+            return true;
+        }
+        return 0;
+    }
+
+    /* Check read access. */
+    rval = access(fichier, R_OK);
+    if (rval == 0)
+        printf("%s is readable\n", fichier);
+    else {
+        printf("%s is not readable (access denied)\n", fichier);
+        write(soc, ERROR403, strlen(ERROR403));
+        sprintf(buf, "<html><title>403 Forbidden</title><body>Access denied</body></html>");
+        write(soc, buf, strlen(buf));
+        return true;
+    }
+
+    //Lecture du fichier
+    FILE *handler = fopen(fichier, "r");
+    if (handler) {
+        //TODO send data
+        write(soc, OK200, strlen(OK200));
+        // Seek the last byte of the file
+        fseek(handler, 0, SEEK_END);
+        // Offset from the first to the last byte, or in other words, filesize
+        ssize_t f_size = ftell(handler);
+        // go back to the start of the file
+        rewind(handler);
+
+        // Allocate a string that can hold it all
+        char *buffer = (char*) malloc(sizeof (char) * (f_size + 1));
+
+        // Read it all in one operation
+        ssize_t r_size = fread(buffer, sizeof (char), f_size, handler);
+
+        // fread doesn't set it so put a \0 in the last position
+        // and buffer is now officially a string
+        buffer[f_size] = '\0';
+
+        if (f_size != r_size) {
+            // Something went wrong, throw away the memory and set
+            // the buffer to NULL
+            free(buffer);
+            buffer = NULL;
+            write(soc, ERROR500, strlen(ERROR500));
+            sprintf(buf, "<html><title>500 Internal Server Error</title><body>500 Internal Server Error</body></html>");
+            write(soc, buf, strlen(buf));
+            return true;
+        }
+        //Write data to socket            
+        write(soc, buffer, strlen(buffer));
+        // Always remember to close the file.
+        fclose(handler);
+        return true;
+    }
     return false;
 }
 
@@ -90,7 +163,7 @@ bool envoiFichier(char *fichier, int soc) {
  * valeur renvoyee: true si OK, false si erreur
  */
 bool envoiRep(char *rep, int soc) {
-    printf("Send folder list %s", rep);
+    printf("Send folder list %s\n", rep);
     DIR *dp;
     struct dirent *pdi;
     char buf[1024];
@@ -103,6 +176,9 @@ bool envoiRep(char *rep, int soc) {
     sprintf(buf, "<html><title>Repertoire %s</title><body><ul>", rep);
     write(soc, buf, strlen(buf));
 
+    //char cwd[1024];
+    //getcwd(cwd, sizeof(cwd));
+
     while ((pdi = readdir(dp)) != NULL) {
         /* A completer
          * Le nom de chaque element contenu dans le repertoire est retrouvable a
@@ -112,8 +188,12 @@ bool envoiRep(char *rep, int soc) {
          * l'icone folder ou generic en fonction du type du fichier.
          * (Tester le nom de l'element avec le chemin complet.) */
         char nom[1024];
-        sprintf(nom, "<li>%s</li>\n\r", pdi->d_name); //TODO add img and complete pwd
-        write(soc, nom, strlen(buf));
+        char buf2[2048];
+        strcpy(nom, rep);
+        strcat(nom, "/");
+        strcat(nom, pdi->d_name); //TODO pass .. and . ?
+        sprintf(buf2, "<li><a href='%s'>%s</a></li>\n\r", nom, nom); //TODO add img and complete pwd
+        write(soc, buf2, strlen(buf2));
     }
     write(soc, "</ul></body></html>\n\r", strlen("</body></html>\n\r"));
     return true;
@@ -152,6 +232,11 @@ void communication(int soc, struct sockaddr *from, socklen_t fromlen) {
     }
 
     switch (operation) {
+        case PUT:
+            write(soc, ERROR501, strlen(ERROR501));
+            sprintf(buf, "<html><title>501 Not Implemented</title><body>Method Not Implemented</body></html>");
+            write(soc, buf, strlen(buf));
+            break;
         case GET:
             pf = strtok(buf + 4, " ");
             /* On pointe alors sur le / de "GET /xxx HTTP...
@@ -185,8 +270,8 @@ void communication(int soc, struct sockaddr *from, socklen_t fromlen) {
             }
             if (!result) {
 
-                write(soc, ERROR404, strlen(OK200));
-                sprintf(buf, "<html><title>404 Not Found\r\n\r\nFile or directory not found</title><body>");
+                write(soc, ERROR404, strlen(ERROR404));
+                sprintf(buf, "<html><title>404 Not Found</title><body>File or directory not found</body></html>");
                 write(soc, buf, strlen(buf));
                 break;
             }
@@ -194,6 +279,7 @@ void communication(int soc, struct sockaddr *from, socklen_t fromlen) {
     }
 
     close(soc);
+    printf("Closing socket\n");
 }
 
 int main(int argc, char **argv) {
